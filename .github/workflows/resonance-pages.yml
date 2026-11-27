@@ -42,8 +42,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          run_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=resonance-sqlite&per_page=100" \
-            --jq '.artifacts[] | select(.expired == false) | .workflow_run.id' | sed -n '1p')
+          run_id=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/artifacts?name=resonance-sqlite&per_page=100" \
+            | jq -r '[.[] | .artifacts[] | select(.expired == false)] | max_by(.created_at) | .workflow_run.id // empty')
           if [[ -n "$run_id" ]]; then
             gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name resonance-sqlite --dir "$ETF_MONITOR_HOME"
             echo "Restored SQLite snapshot from run $run_id"
