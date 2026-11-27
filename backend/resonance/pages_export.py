@@ -19,7 +19,7 @@ from base.scheduler.etf_daily_jobs import job_backfill_etf_daily
 from base.scheduler.sentiment_jobs import job_fetch_sentiment
 from base.scheduler.shares_jobs import job_backfill_shares
 from base.store.calendar_repo import get_last_trading_day, get_range
-from base.store.daily_repo import get_by_code, get_latest_date
+from base.store.daily_repo import get_by_code, get_latest_date, get_trading_dates
 from base.store.database import get_connection, init_db
 from base.store.etf_repo import load_into_config, seed_from_config
 from base.store.sentiment_repo import get_margin_series, get_turnover_series
@@ -60,7 +60,13 @@ def refresh(now: datetime) -> dict[str, Any]:
         raise RuntimeError("ETF 日线采集未生成任何记录")
 
     sentiment = job_fetch_sentiment(progress, end_date=target)
-    shares = job_backfill_shares(progress, days=SHARE_BACKFILL_DAYS)
+    shares_target = get_last_trading_day((now.date() - timedelta(days=1)).isoformat())
+    share_dates = get_trading_dates(end=shares_target)[-SHARE_BACKFILL_DAYS:]
+    shares = (
+        job_backfill_shares(progress, start_date=share_dates[0], end_date=share_dates[-1], codes=list(ETFS))
+        if share_dates
+        else {}
+    )
     return {"target_trade_date": target, "etf_daily": daily, "sentiment": sentiment, "shares": shares}
 
 
@@ -75,8 +81,13 @@ def snapshot(now: datetime, collection: dict[str, Any]) -> dict[str, Any]:
             code, [row for row in daily if row.get("composite_prob") is not None], enriched_turnover, margin
         )
         history = analysis["history"][-HISTORY_DAYS:]
+        daily_by_date = {row["date"]: row for row in daily}
         for item in history:
             item["verdict"] = verdict_of(item["red"], item["green"])
+            daily_row = daily_by_date[item["date"]]
+            item["close_price"] = daily_row["close_price"]
+            item["shares_yi"] = daily_row["shares_yi"]
+            item["shares_delta_yi"] = daily_row["shares_delta_yi"]
         analysis.update(
             history=history,
             name=info["name"],
