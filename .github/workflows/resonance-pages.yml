@@ -24,7 +24,6 @@ jobs:
       actions: read
     env:
       TZ: Asia/Shanghai
-      ETF_MONITOR_HOME: ${{ runner.temp }}/resonance-data
       PYTHONPATH: backend
       PYTHONUNBUFFERED: '1'
     steps:
@@ -36,6 +35,8 @@ jobs:
           python-version: '3.12'
       - name: 安装采集依赖
         run: pip install -r backend/requirements.txt
+      - name: 配置 SQLite 存储路径
+        run: echo "ETF_MONITOR_HOME=$RUNNER_TEMP/resonance-data" >> "$GITHUB_ENV"
       - name: 恢复上次已保存的数据
         env:
           GH_TOKEN: ${{ github.token }}
