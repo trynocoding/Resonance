@@ -1,11 +1,12 @@
-name: 采集共振数据并发布 GitHub Pages
+name: 发布 Resonance 服务器数据到 GitHub Pages
 
 on:
   workflow_dispatch:
   schedule:
-    # 北京时间工作日 21:43，次日上午 10:13 补取次日披露的数据。
-    - cron: '43 13 * * 1-5'
-    - cron: '13 2 * * 2-6'
+    # 在服务器导出任务之后发布，时间为北京时间 16:33、21:53、次日 10:33。
+    - cron: '33 8 * * 1-5'
+    - cron: '53 13 * * 1-5'
+    - cron: '33 2 * * 2-6'
 
 concurrency:
   group: resonance-pages
@@ -15,54 +16,31 @@ permissions:
   contents: read
 
 jobs:
-  collect:
+  build:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    permissions:
-      contents: read
-      actions: read
-    env:
-      TZ: Asia/Shanghai
-      PYTHONPATH: backend
-      PYTHONUNBUFFERED: '1'
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
+      - name: 读取服务器数据分支
+        uses: actions/checkout@v6
+        with:
+          ref: resonance-data
+          path: server-snapshot
+          persist-credentials: false
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
-      - name: 安装采集依赖
-        # 1.20.45 起重命名了当前采集器调用的接口。
-        run: pip install -r backend/requirements.txt 'akshare==1.20.44'
-      - name: 配置 SQLite 存储路径
-        run: echo "ETF_MONITOR_HOME=$RUNNER_TEMP/resonance-data" >> "$GITHUB_ENV"
-      - name: 恢复上次已保存的数据
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          run_id=$(gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/artifacts?name=resonance-sqlite&per_page=100" \
-            | jq -r '[.[] | .artifacts[] | select(.expired == false)] | max_by(.created_at) | .workflow_run.id // empty')
-          if [[ -n "$run_id" ]]; then
-            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name resonance-sqlite --dir "$ETF_MONITOR_HOME"
-            echo "Restored SQLite snapshot from run $run_id"
-          fi
-      - name: 采集并导出日度快照
-        run: python -m resonance.pages_export --output _site --template pages/index.template.html
-      - name: 保存增量采集基线
-        uses: actions/upload-artifact@v7
-        with:
-          name: resonance-sqlite
-          path: ${{ env.ETF_MONITOR_HOME }}/etf_monitor.db
-          if-no-files-found: error
-          retention-days: 30
+      - name: 生成静态看板
+        run: python pages/render_site.py server-snapshot/resonance.json _site
       - uses: actions/upload-pages-artifact@v5
         with:
           path: _site
 
   deploy:
-    needs: collect
+    needs: build
     runs-on: ubuntu-latest
     permissions:
       pages: write

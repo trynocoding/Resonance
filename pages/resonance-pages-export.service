@@ -1,0 +1,16 @@
+[Unit]
+Description=Publish a Resonance market data snapshot to GitHub
+After=network-online.target resonance.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+StateDirectory=resonance-pages-export
+StateDirectoryMode=0700
+ExecStart=/opt/resonance-pages-export/publish-from-server.sh
+TimeoutStartSec=5min
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+NoNewPrivileges=true
+UMask=0077

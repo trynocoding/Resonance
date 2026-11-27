@@ -1,0 +1,11 @@
+[Unit]
+Description=Export Resonance after the server's market data collection
+
+[Timer]
+OnCalendar=Mon..Fri *-*-* 16:20:00 Asia/Shanghai
+OnCalendar=Mon..Fri *-*-* 21:40:00 Asia/Shanghai
+OnCalendar=Tue..Sat *-*-* 10:20:00 Asia/Shanghai
+Persistent=true
+
+[Install]
+WantedBy=timers.target
