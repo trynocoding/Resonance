@@ -1,0 +1,73 @@
+name: 采集共振数据并发布 GitHub Pages
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 北京时间工作日 21:43，次日上午 10:13 补取次日披露的数据。
+    - cron: '43 13 * * 1-5'
+    - cron: '13 2 * * 2-6'
+
+concurrency:
+  group: resonance-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  collect:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      actions: read
+    env:
+      TZ: Asia/Shanghai
+      ETF_MONITOR_HOME: ${{ runner.temp }}/resonance-data
+      PYTHONPATH: backend
+      PYTHONUNBUFFERED: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - name: 安装采集依赖
+        run: pip install -r backend/requirements.txt
+      - name: 恢复上次已保存的数据
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/actions/artifacts?name=resonance-sqlite&per_page=100" \
+            --jq '.artifacts[] | select(.expired == false) | .workflow_run.id' | sed -n '1p')
+          if [[ -n "$run_id" ]]; then
+            gh run download "$run_id" --repo "$GITHUB_REPOSITORY" --name resonance-sqlite --dir "$ETF_MONITOR_HOME"
+            echo "Restored SQLite snapshot from run $run_id"
+          fi
+      - name: 采集并导出日度快照
+        run: python -m resonance.pages_export --output _site --template pages/index.template.html
+      - name: 保存增量采集基线
+        uses: actions/upload-artifact@v7
+        with:
+          name: resonance-sqlite
+          path: ${{ env.ETF_MONITOR_HOME }}/etf_monitor.db
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    needs: collect
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v5
+        id: deployment
