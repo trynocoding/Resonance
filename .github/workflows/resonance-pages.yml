@@ -34,7 +34,8 @@ jobs:
         with:
           python-version: '3.12'
       - name: 安装采集依赖
-        run: pip install -r backend/requirements.txt
+        # 1.20.45 起重命名了当前采集器调用的接口。
+        run: pip install -r backend/requirements.txt 'akshare==1.20.44'
       - name: 配置 SQLite 存储路径
         run: echo "ETF_MONITOR_HOME=$RUNNER_TEMP/resonance-data" >> "$GITHUB_ENV"
       - name: 恢复上次已保存的数据

@@ -21,7 +21,7 @@ from base.scheduler.shares_jobs import job_backfill_shares
 from base.store.calendar_repo import get_last_trading_day, get_range
 from base.store.daily_repo import get_by_code, get_latest_date
 from base.store.database import get_connection, init_db
-from base.store.etf_repo import load_into_config
+from base.store.etf_repo import load_into_config, seed_from_config
 from base.store.sentiment_repo import get_margin_series, get_turnover_series
 from resonance.analysis.core import compute_resonance, verdict_of
 
@@ -143,6 +143,7 @@ def main() -> None:
     args = parser.parse_args()
 
     init_db()
+    seed_from_config()
     load_into_config()
     collection = refresh(datetime.now(SHANGHAI))
     print(json.dumps(collection, ensure_ascii=False), flush=True)
